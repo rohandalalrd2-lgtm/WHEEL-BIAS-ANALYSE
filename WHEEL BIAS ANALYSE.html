@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wheel Analysis Pro | Telemetry Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js, Data Labels Plugin, and jStat Math Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
+    
+    <!-- HTML to PDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <style>
+        /* Global & Reset - Forced Bold */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-weight: 700 !important; }
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #1e293b; line-height: 1.5; }
+
+        /* Layout */
+        .container { width: 100%; max-width: 1050px; margin: 32px auto; padding: 0 24px; display: flex; flex-direction: column; gap: 24px; align-items: center; }
+        #inputCard { width: 100%; }
+
+        /* Cards */
+        .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03); border: 1px solid #e2e8f0; padding: 20px; display: block; margin-bottom: 24px; page-break-inside: avoid; width: 100%; box-sizing: border-box; }
+        .card-header { font-size: 21px; color: #0f172a; margin-bottom: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
+        
+        /* Input Area & Grid */
+        .input-group { display: flex; flex-direction: column; }
+        .input-meta-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; width: 100%; }
+        .input-field { display: flex; flex-direction: column; min-width: 0; }
+        .input-field label { font-size: 15px; margin-bottom: 6px; color: #475569; white-space: nowrap; }
+        .input-field input, .input-field select { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 16px; color: #1e293b; background: #fff; transition: all 0.2s ease; cursor: pointer; text-overflow: ellipsis; }
+        .input-field input:focus, .input-field select:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56,189,248,0.2); }
+        
+        /* Responsive fallback for smaller screens */
+        @media (max-width: 768px) { .input-meta-grid { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 480px) { .input-meta-grid { grid-template-columns: 1fr; } }
+
+        textarea { width: 100%; min-height: 150px; padding: 16px; border: 2px dashed #cbd5e1; border-radius: 8px; font-family: monospace; font-size: 16px; color: #334155; background: #f8fafc; transition: all 0.2s ease; resize: vertical; margin-bottom: 12px; box-sizing: border-box; }
+        textarea:focus { outline: none; border-color: #38bdf8; background: #fff; box-shadow: 0 0 0 3px rgba(56,189,248,0.2); }
+        .notice { font-size: 15px; color: #0ea5e9; background: #e0f2fe; padding: 10px 12px; border-radius: 6px; display: none; margin-bottom: 12px; }
+        
+        /* Buttons */
+        .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+        button { padding: 12px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 6px; transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; flex: 1; min-width: 200px; }
+        button.primary { background: #2563eb; color: white; box-shadow: 0 4px 6px -1px rgba(37,99,235,0.2); }
+        button.primary:hover { background: #1d4ed8; }
+        button.secondary { background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; }
+        button.secondary:hover { background: #e2e8f0; color: #0f172a; }
+        button.export { background: #10b981; color: white; }
+        button.export:hover { background: #059669; }
+
+        /* Scroll Wrapper */
+        .export-scroll-wrapper { width: 100%; overflow-x: auto; overflow-y: visible; padding-bottom: 20px; display: block; }
+        
+        /* Expanded Export Area for Landscape */
+        #exportArea { display: block; width: 100%; max-width: 1050px; margin: 0 auto; padding: 0; box-sizing: border-box; }
+
+        /* Report Main Centered Title */
+        .report-main-title { text-align: center; font-size: 28px; color: #0f172a; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #0f172a; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* Exact Match PDF Main Results Table */
+        .table-container { display: flex; align-items: center; justify-content: flex-start; margin-bottom: 16px; }
+        table.main-results { width: 100%; border-collapse: collapse; border: 1px solid #333; font-size: 16px; }
+        table.main-results th, table.main-results td { padding: 5px 12px; text-align: left; border: 1px solid #555; }
+        table.main-results th { background-color: #4f6b49; color: #fffcf2; width: 55%; text-transform: uppercase; }
+        table.main-results td { background-color: #bacbaf; color: #000; transition: background-color 0.3s ease; }
+
+        /* Sub-header for combined card */
+        .sub-header { font-size: 17px; color: #0f172a; margin-bottom: 8px; text-align: center; text-transform: uppercase; }
+
+        /* Individual Results Table - Fixed Layout */
+        .indiv-results-wrapper { width: 100%; display: flex; justify-content: center; overflow-x: hidden; }
+        table.indiv-results { border-collapse: collapse; font-family: 'Inter', sans-serif; font-size: 14px; text-align: center; margin: 0 auto; width: 100%; table-layout: fixed; }
+        table.indiv-results td { border-right: 1px solid #999; padding: 4px 1px; color: #000; white-space: nowrap; }
+        table.indiv-results tr.no-row td { padding-top: 6px; padding-bottom: 2px; }
+        table.indiv-results tr.qty-row td { padding-top: 2px; padding-bottom: 2px; }
+        table.indiv-results tr.bias-row td { padding-top: 2px; padding-bottom: 6px; font-size: 12px; letter-spacing: -0.3px; }
+        table.indiv-results td:first-child { text-align: left; border-right: 1.5px solid #000; width: 45px; }
+        table.indiv-results td:last-child { border-right: none; }
+        table.indiv-results tr.divider td { border-top: 1.5px solid #000; }
+        
+        .bg-gray { background-color: #d1d5db !important; }
+        .txt-green { color: #16a34a !important; }
+        .txt-red { color: #dc2626 !important; }
+        .txt-black { color: #000 !important; }
+        
+        /* Bias Color Classes - 20% Darker backgrounds with pure black text */
+        .pos-bias { background-color: #38b960 !important; color: #000000 !important; }
+        .neg-bias { background-color: #d65757 !important; color: #000000 !important; }
+
+        /* Charts */
+        .chart-container-radar { position: relative; height: 500px; width: 100%; max-width: 650px; margin: 0 auto; }
+        .chart-container-bar { position: relative; height: 400px; width: 100%; max-width: 950px; margin: 0 auto 12px auto; }
+        
+        /* Legend */
+        .custom-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 24px; font-size: 15px; color: #64748b; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .legend-line { display: flex; align-items: center; width: 40px; height: 2px; position: relative; justify-content: space-evenly; }
+        .results-line { background-color: #000; }
+        .mean-line { background-color: #008000; }
+        .sd1-line { background-color: #FFA500; }
+        .sd2-line { background-color: #c0504d; }
+        .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; z-index: 2; box-shadow: 0 0 0 1px #fff; }
+        .dot-black { background-color: #000; }
+        .dot-green { background-color: #76ff03; }
+        .dot-red { background-color: #ff0000; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <div class="card" id="inputCard">
+        <div class="input-group">
+            <div class="input-meta-grid">
+                <div class="input-field">
+                    <label>WHEEL TYPE</label>
+                    <select id="wheelType">
+                        <option value="single">European (Single Zero - 37 Pockets)</option>
+                        <option value="double">American (Double Zero - 38 Pockets)</option>
+                        <option value="triple">Sands (Triple Zero - 39 Pockets)</option>
+                    </select>
+                </div>
+                <div class="input-field">
+                    <label>SERIAL NUMBER (FOR)</label>
+                    <input type="text" id="inputSerial" placeholder="e.g., AR 02 (25-09)">
+                </div>
+                <div class="input-field">
+                    <label>LOCATION / SITE</label>
+                    <input type="text" id="inputLocation" placeholder="e.g., Main Floor">
+                </div>
+                <div class="input-field">
+                    <label>DATE</label>
+                    <input type="text" id="inputDate" placeholder="e.g., 23-09-2026">
+                </div>
+            </div>
+
+            <textarea id="spinData" placeholder="Paste your raw spin results here (one number per line or separated by spaces)..."></textarea>
+            <div class="notice" id="statusMessage"></div>
+        </div>
+        
+        <div class="actions">
+            <button type="button" class="secondary" onclick="clearData()">CLEAR DATA</button>
+            <button type="button" class="primary" onclick="analyzeWheel()">RUN STATISTICAL ANALYSIS</button>
+            <button type="button" class="export" id="exportBtn" onclick="exportToPDF()">DOWNLOAD LANDSCAPE PDF</button>
+        </div>
+    </div>
+
+    <!-- Scroll Wrapper ALWAYS VISIBLE -->
+    <div class="export-scroll-wrapper" id="scrollWrapper">
+        <div id="exportArea">
+            
+            <!-- TITLE & STATISTICAL SUMMARY CARD (PAGE 1) -->
+            <div class="card">
+                <div class="report-main-title">WHEEL ANALYSIS REPORT</div>
+
+                <div class="card-header">STATISTICAL SUMMARY</div>
+                
+                <div class="table-container">
+                    <table class="main-results" id="resultsTable">
+                        <tbody>
+                            <tr><th>SERIAL NUMBER</th><td id="res-serial-tbl">N/A</td></tr>
+                            <tr><th>LOCATION</th><td id="res-location-tbl">N/A</td></tr>
+                            <tr><th>RESULTS SHOWN</th><td id="res-total">0</td></tr>
+                            <tr><th>DATE</th><td id="res-date">N/A</td></tr>
+                            <tr><th>±2 S.D. TEST</th><td id="res-2sd">0/2 (N/A)</td></tr>
+                            <tr><th>±1 S.D. TEST</th><td id="res-1sd">0/13 (N/A)</td></tr>
+                            <tr><th>CHI SQUARED CONFIDENCE (PERCENT)</th><td id="res-chi-pct">0.0%</td></tr>
+                            <tr><th>CHI SQUARED CONFIDENCE (DECIMAL)</th><td id="res-chi-dec">0.000</td></tr>
+                            <tr><th>P VALUE (DECIMAL)</th><td id="res-pval">0.000</td></tr>
+                            <tr><th>STATUS</th><td id="res-status">WAITING FOR DATA</td></tr>
+                            <tr><th>RECOMMENDED ACTION</th><td id="res-action">N/A</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- EXPLICIT PAGE BREAK -->
+            <div class="html2pdf__page-break"></div>
+
+            <!-- RADAR PLOT CARD (PAGE 2) -->
+            <div class="card">
+                <div class="card-header">
+                    SPATIAL BIAS RADAR PLOT
+                    <span id="res-type" style="font-size: 15px; color: #64748b; margin-top: 4px; text-transform: none;">European (Single Zero - 37 Pockets)</span>
+                </div>
+                <div class="chart-container-radar">
+                    <canvas id="wheelChart"></canvas>
+                </div>
+                <div class="custom-legend">
+                    <span class="legend-item">
+                        <span class="legend-line results-line">
+                            <span class="dot dot-black"></span>
+                            <span class="dot dot-green"></span>
+                            <span class="dot dot-red"></span>
+                        </span>
+                        # of results
+                    </span>
+                    <span class="legend-item"><span class="legend-line mean-line"></span>Mean</span>
+                    <span class="legend-item"><span class="legend-line sd1-line"></span>±1 S.D.</span>
+                    <span class="legend-item"><span class="legend-line sd2-line"></span>±2 S.D.</span>
+                </div>
+            </div>
+
+            <!-- EXPLICIT PAGE BREAK -->
+            <div class="html2pdf__page-break"></div>
+
+            <!-- BAR CHART (PAGE 3) -->
+            <div class="card">
+                <div class="card-header">HIT FREQUENCY DISTRIBUTION</div>
+                <div class="chart-container-bar">
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
+
+            <!-- EXPLICIT PAGE BREAK -->
+            <div class="html2pdf__page-break"></div>
+
+            <!-- NEW BIAS CHART & TABLE CARD (PAGE 4) -->
+            <div class="card">
+                <div class="card-header">BIAS DEVIATION ANALYSIS</div>
+                
+                <div class="chart-container-bar" style="height: 380px;">
+                    <canvas id="biasChart"></canvas>
+                </div>
+
+                <div class="sub-header" style="margin-top: 24px;">INDIVIDUAL RESULTS:</div>
+                <div class="indiv-results-wrapper" id="individualResultsWrapper">
+                    <!-- Populated dynamically via JS -->
+                </div>
+
+            </div>
+
+        </div> 
+    </div> 
+</div>
+
+<script>
+    Chart.register(ChartDataLabels);
+
+    const WHEEL_LAYOUTS = {
+        'single': ['0', '32', '15', '19', '4', '21', '2', '25', '17', '34', '6', '27', '13', '36', '11', '30', '8', '23', '10', '5', '24', '16', '33', '1', '20', '14', '31', '9', '22', '18', '29', '7', '28', '12', '35', '3', '26'],
+        'double': ['0', '28', '9', '26', '30', '11', '7', '20', '32', '17', '5', '22', '34', '15', '3', '24', '36', '1', '00', '27', '10', '25', '29', '12', '8', '19', '31', '18', '6', '21', '33', '16', '4', '23', '35', '14', '2'],
+        'triple': ['0', '000', '00', '32', '15', '19', '4', '21', '2', '25', '17', '34', '6', '27', '13', '36', '11', '30', '8', '23', '10', '5', '24', '16', '33', '1', '20', '14', '31', '9', '22', '18', '29', '7', '28', '12', '35', '3', '26']
+    };
+
+    const RED_NUMS = ['1','3','5','7','9','12','14','16','18','19','21','23','25','27','30','32','34','36'];
+    const SD1_LIMITS = { 37: 13, 38: 14, 39: 14 };
+    const SD2_LIMITS = { 37: 2, 38: 2, 39: 2 };
+
+    let wheelChartInstance = null;
+    let barChartInstance = null;
+    let biasChartInstance = null;
+
+    window.onload = function() {
+        initEmptyState();
+    };
+
+    function initEmptyState() {
+        const wheelSelect = document.getElementById('wheelType');
+        const wheelType = wheelSelect.value;
+        const layout = WHEEL_LAYOUTS[wheelType];
+        const emptyData = new Array(layout.length).fill(0);
+        
+        document.getElementById('res-serial-tbl').innerText = 'N/A';
+        document.getElementById('res-location-tbl').innerText = 'N/A';
+        document.getElementById('res-total').innerText = '0';
+        document.getElementById('res-type').innerText = wheelSelect.options[wheelSelect.selectedIndex].text;
+        document.getElementById('res-date').innerText = 'N/A';
+        document.getElementById('res-1sd').innerText = '0/13 (N/A)';
+        document.getElementById('res-2sd').innerText = '0/2 (N/A)';
+        document.getElementById('res-chi-pct').innerText = '0.0%';
+        document.getElementById('res-chi-dec').innerText = '0.000';
+        document.getElementById('res-pval').innerText = '0.000';
+
+        const st = document.getElementById('res-status');
+        st.innerText = 'WAITING FOR DATA';
+        st.style.color = '#000';
+        st.style.backgroundColor = '#bacbaf';
+
+        const ac = document.getElementById('res-action');
+        ac.innerText = 'N/A';
+        ac.style.color = '#000';
+        ac.style.backgroundColor = '#bacbaf';
+
+        renderIndividualResultsTable(layout, emptyData, 0);
+        renderCharts(layout, emptyData, 0, 0, 0, 0, 0, 0, emptyData);
+    }
+
+    document.getElementById('wheelType').addEventListener('change', initEmptyState);
+
+    function clearData() {
+        if (!confirm("Are you sure you want to clear all data? This action cannot be undone.")) {
+            return;
+        }
+        
+        document.getElementById('inputSerial').value = '';
+        document.getElementById('inputLocation').value = '';
+        document.getElementById('inputDate').value = '';
+        document.getElementById('spinData').value = '';
+        document.getElementById('statusMessage').style.display = 'none';
+        
+        initEmptyState(); 
+    }
+
+    function exportToPDF() {
+        const wrapper = document.getElementById('scrollWrapper');
+        const element = document.getElementById('exportArea');
+        const exportBtn = document.getElementById('exportBtn');
+        
+        wrapper.style.overflow = 'visible';
+        element.style.width = '1050px'; 
+        element.style.maxWidth = '1050px';
+
+        const opt = {
+            margin:       [0.3, 0.15, 0.3, 0.15], 
+            filename:     'Wheel_Analysis_Report.pdf',
+            image:        { type: 'jpeg', quality: 1.0 },
+            html2canvas:  { scale: 2, useCORS: true, letterRendering: true, scrollY: 0 }, 
+            jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' },
+            pagebreak:    { mode: ['css', 'legacy'] }
+        };
+        
+        exportBtn.innerText = 'GENERATING PDF...';
+        
+        html2pdf().set(opt).from(element).save()
+            .catch((error) => { console.error('PDF export failed:', error); })
+            .finally(() => {
+                exportBtn.innerText = 'DOWNLOAD LANDSCAPE PDF';
+                wrapper.style.overflow = 'auto';
+                element.style.width = '100%';
+                element.style.maxWidth = '1050px';
+                if(wheelChartInstance) wheelChartInstance.resize();
+                if(barChartInstance) barChartInstance.resize();
+                if(biasChartInstance) biasChartInstance.resize();
+            });
+    }
+
+    function analyzeWheel() {
+        const rawText = document.getElementById('spinData').value;
+        const tokens = rawText.split(/[\s,]+/).filter(t => t.trim() !== '');
+        if (tokens.length === 0) return alert("Please enter spin data first.");
+
+        const wheelSelect = document.getElementById('wheelType');
+        const wheelType = wheelSelect.value;
+        const wheelName = wheelSelect.options[wheelSelect.selectedIndex].text;
+        const layout = WHEEL_LAYOUTS[wheelType];
+
+        const validTokens = [];
+        const invalidTokens = [];
+        
+        tokens.forEach(t => {
+            const num = Number(t);
+            const strVal = String(num);
+            if (t === '000' && layout.includes('000')) { validTokens.push(t); }
+            else if (t === '00' && layout.includes('00')) { validTokens.push(t); }
+            else if (Number.isInteger(num) && num >= 0 && num <= 36 && t === strVal) { validTokens.push(strVal); }
+            else { invalidTokens.push(t); }
+        });
+
+        if (validTokens.length === 0) return alert("No valid roulette numbers found in your input.");
+
+        const statusBox = document.getElementById('statusMessage');
+        statusBox.style.display = 'block';
+        statusBox.innerText = `Selected ${wheelName}. Processed ${validTokens.length} valid spins.` + (invalidTokens.length ? ` Ignored ${invalidTokens.length} invalid entr${invalidTokens.length === 1 ? 'y' : 'ies'}.` : '');
+
+        const data = {};
+        layout.forEach(p => data[p] = 0);
+        validTokens.forEach(t => data[t]++);
+
+        const N = validTokens.length; const k = layout.length;
+        const mean = N / k;
+        const sd = Math.sqrt(N * (1/k) * ((k-1)/k)); 
+        const expectedPerc = 100 / k;
+
+        const sd1_low = mean - sd; const sd1_high = mean + sd;
+        const sd2_low = mean - (2 * sd); const sd2_high = mean + (2 * sd);
+
+        let total_sd1_fails = 0; let sd2_fails = 0; let chiSquare = 0;
+        const chartData = [];
+        const biasData = [];
+
+        layout.forEach(pocket => {
+            const count = data[pocket];
+            chartData.push(count);
+            
+            const perc = (count / N) * 100;
+            biasData.push(parseFloat((perc - expectedPerc).toFixed(2)));
+
+            if (count < sd1_low || count > sd1_high) total_sd1_fails++;
+            if (count < sd2_low || count > sd2_high) sd2_fails++;
+            chiSquare += Math.pow(count - mean, 2) / Math.max(mean, 0.0001); 
+        });
+
+        const exclusive_sd1_fails = total_sd1_fails - sd2_fails;
+        const df = k - 1;
+
+        const pVal = 1 - jStat.chisquare.cdf(chiSquare, df);
+        const confidenceDec = Math.max(0, 1 - pVal);
+        
+        let pctStr, decStr;
+        if (confidenceDec >= 0.01 || confidenceDec === 0) {
+            decStr = confidenceDec.toFixed(3);
+            pctStr = (confidenceDec * 100).toFixed(1) + '%';
+        } else {
+            decStr = confidenceDec.toPrecision(3);
+            pctStr = parseFloat((confidenceDec * 100).toPrecision(3)).toString() + '%';
+        }
+        
+        if (confidenceDec > 0.999) {
+            decStr = "1.000";
+            pctStr = "100.0%";
+        }
+
+        const serialNum = document.getElementById('inputSerial').value.trim() || 'N/A';
+        const locationVal = document.getElementById('inputLocation').value.trim() || 'N/A';
+        const dateVal = document.getElementById('inputDate').value.trim() || 'N/A';
+
+        document.getElementById('res-serial-tbl').innerText = serialNum;
+        document.getElementById('res-location-tbl').innerText = locationVal;
+        document.getElementById('res-total').innerText = N;
+        document.getElementById('res-type').innerText = wheelName;
+        document.getElementById('res-date').innerText = dateVal;
+
+        const allowed1SD = SD1_LIMITS[k]; const allowed2SD = SD2_LIMITS[k];
+        const pass1SD = exclusive_sd1_fails <= allowed1SD; const pass2SD = sd2_fails <= allowed2SD; 
+
+        document.getElementById('res-1sd').innerText = `${exclusive_sd1_fails}/${allowed1SD} (${pass1SD ? 'Pass' : 'Fail'})`;
+        document.getElementById('res-2sd').innerText = `${sd2_fails}/${allowed2SD} (${pass2SD ? 'Pass' : 'Fail'})`;
+        document.getElementById('res-chi-pct').innerText = pctStr;
+        document.getElementById('res-chi-dec').innerText = decStr;
+        document.getElementById('res-pval').innerText = pVal.toFixed(3);
+        
+        const isBiased = !(pVal > 0.01 && pass2SD); 
+        
+        const stBox = document.getElementById('res-status');
+        const acBox = document.getElementById('res-action');
+        
+        if (isBiased) {
+            stBox.innerText = "BIAS DETECTED";
+            stBox.style.color = "#991b1b";
+            stBox.style.backgroundColor = "#fecaca";
+            acBox.innerText = "INSPECT WHEEL";
+            acBox.style.color = "#991b1b";
+            acBox.style.backgroundColor = "#fecaca";
+        } else {
+            stBox.innerText = "NORMAL";
+            stBox.style.color = "#0f766e";
+            stBox.style.backgroundColor = "#99f6e4";
+            acBox.innerText = "NONE";
+            acBox.style.color = "#0f766e";
+            acBox.style.backgroundColor = "#99f6e4";
+        }
+
+        renderIndividualResultsTable(layout, chartData, N);
+        renderCharts(layout, chartData, mean, sd1_low, sd1_high, sd2_low, sd2_high, sd, biasData);
+    }
+
+    function renderIndividualResultsTable(labels, observed, total) {
+        const container = document.getElementById('individualResultsWrapper');
+        const midpoint = Math.ceil(labels.length / 2); 
+        const k = labels.length;
+        const expPerc = total > 0 ? 100 / k : 0;
+        
+        let html = '<table class="indiv-results">';
+        
+        // --- TOP HALF ---
+        html += '<tr class="no-row"><td>No.</td>';
+        for(let i = 0; i < midpoint; i++) {
+            let numColor = (labels[i]==='0'||labels[i]==='00'||labels[i]==='000') ? 'txt-green' : (RED_NUMS.includes(labels[i]) ? 'txt-red' : 'txt-black');
+            let bgClass = (i % 2 === 0) ? 'bg-gray' : '';
+            html += `<td class="${bgClass}"><span class="${numColor}">${labels[i]}</span></td>`;
+        }
+        html += '</tr>';
+
+        html += '<tr class="qty-row"><td>Qty.</td>';
+        for(let i = 0; i < midpoint; i++) {
+            let bgClass = (i % 2 === 0) ? 'bg-gray' : '';
+            html += `<td class="${bgClass}">${observed[i]}</td>`;
+        }
+        html += '</tr>';
+
+        html += '<tr class="bias-row"><td>Bias</td>';
+        for(let i = 0; i < midpoint; i++) {
+            let perc = total > 0 ? (observed[i] / total) * 100 : 0;
+            let bias = total > 0 ? (perc - expPerc) : 0;
+            let bClass = total > 0 ? (bias >= 0 ? 'pos-bias' : 'neg-bias') : '';
+            let sign = bias > 0 ? '+' : '';
+            html += `<td class="${bClass}">${total > 0 ? sign + bias.toFixed(2) + '%' : '-'}</td>`;
+        }
+        html += '</tr>';
+
+        // --- BOTTOM HALF ---
+        html += '<tr class="no-row divider"><td>No.</td>';
+        for(let i = midpoint; i < labels.length; i++) {
+            let numColor = (labels[i]==='0'||labels[i]==='00'||labels[i]==='000') ? 'txt-green' : (RED_NUMS.includes(labels[i]) ? 'txt-red' : 'txt-black');
+            let bgClass = ((i - midpoint) % 2 === 0) ? 'bg-gray' : '';
+            html += `<td class="${bgClass}"><span class="${numColor}">${labels[i]}</span></td>`;
+        }
+        for(let i = 0; i < (midpoint - (labels.length - midpoint)); i++) html += '<td></td>';
+        html += '</tr>';
+
+        html += '<tr class="qty-row"><td>Qty.</td>';
+        for(let i = midpoint; i < labels.length; i++) {
+            let bgClass = ((i - midpoint) % 2 === 0) ? 'bg-gray' : '';
+            html += `<td class="${bgClass}">${observed[i]}</td>`;
+        }
+        for(let i = 0; i < (midpoint - (labels.length - midpoint)); i++) html += '<td></td>';
+        html += '</tr>';
+
+        html += '<tr class="bias-row"><td>Bias</td>';
+        for(let i = midpoint; i < labels.length; i++) {
+            let perc = total > 0 ? (observed[i] / total) * 100 : 0;
+            let bias = total > 0 ? (perc - expPerc) : 0;
+            let bClass = total > 0 ? (bias >= 0 ? 'pos-bias' : 'neg-bias') : '';
+            let sign = bias > 0 ? '+' : '';
+            html += `<td class="${bClass}">${total > 0 ? sign + bias.toFixed(2) + '%' : '-'}</td>`;
+        }
+        for(let i = 0; i < (midpoint - (labels.length - midpoint)); i++) html += '<td></td>';
+        html += '</tr></table>';
+
+        container.innerHTML = html;
+    }
+
+    function renderCharts(labels, observed, mean, sd1_low, sd1_high, sd2_low, sd2_high, sd, biasData) {
+        const createConstantArray = (val) => new Array(labels.length).fill(val);
+
+        const pointColorsRadar = labels.map((l) => {
+            if (l === '0' || l === '00' || l === '000') return '#76ff03'; 
+            if (RED_NUMS.includes(l)) return '#ff0000'; 
+            return '#000000'; 
+        });
+
+        const pointColorsBar = labels.map(l => 
+            (l==='0' || l==='00' || l==='000') ? '#2ecc71' : 
+            (RED_NUMS.includes(l) ? '#b91c1c' : '#111827')
+        );
+
+        const safeMax = Math.max(10, Math.ceil(mean + (3 * sd)));
+        const safeMin = Math.max(0, Math.floor(Math.min(...observed, sd2_low) - (sd * 2)));
+
+        // 1. RADAR CHART
+        const ctxRadar = document.getElementById('wheelChart').getContext('2d');
+        if (wheelChartInstance) wheelChartInstance.destroy();
+        wheelChartInstance = new Chart(ctxRadar, {
+            type: 'radar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: '# of results', data: observed, borderColor: '#000000', backgroundColor: 'rgba(0,0,0,0)', pointBackgroundColor: pointColorsRadar, pointBorderColor: pointColorsRadar, pointRadius: 4.5, borderWidth: 1.5, order: 1 },
+                    { label: 'Mean', data: createConstantArray(mean), borderColor: '#008000', borderWidth: 1.5, fill: false, pointRadius: 0, order: 2 },
+                    { label: '±1 S.D. High', data: createConstantArray(sd1_high), borderColor: '#FFA500', borderWidth: 1.5, fill: false, pointRadius: 0, order: 3 },
+                    { label: '±1 S.D. Low', data: createConstantArray(sd1_low), borderColor: '#FFA500', borderWidth: 1.5, fill: false, pointRadius: 0, order: 4 },
+                    { label: '±2 S.D. High', data: createConstantArray(sd2_high), borderColor: '#c0504d', borderWidth: 1.5, fill: false, pointRadius: 0, order: 5 },
+                    { label: '±2 S.D. Low', data: createConstantArray(sd2_low), borderColor: '#c0504d', borderWidth: 1.5, fill: false, pointRadius: 0, order: 6 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                plugins: { 
+                    legend: { display: false },
+                    datalabels: { display: false } 
+                },
+                scales: { 
+                    r: { 
+                        angleLines: { color: '#cbd5e1', lineWidth: 1 }, 
+                        grid: { color: '#cbd5e1', circular: true, lineWidth: 1 }, 
+                        pointLabels: { font: { size: 14, family: 'Inter', weight: 'bold' }, color: '#475569' }, 
+                        ticks: { color: '#64748b', backdropColor: 'transparent', z: 10, font: { size: 13, family: 'Inter', weight: 'bold' } }, 
+                        suggestedMin: safeMin,
+                        suggestedMax: safeMax
+                    } 
+                }
+            }
+        });
+
+        // 2. HIT FREQUENCY BAR CHART
+        const ctxBar = document.getElementById('barChart').getContext('2d');
+        if (barChartInstance) barChartInstance.destroy();
+        barChartInstance = new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { type: 'bar', label: 'Hit Frequency', data: observed, backgroundColor: pointColorsBar, order: 10, borderRadius: 4 },
+                    { type: 'line', label: 'Mean', data: createConstantArray(mean), borderColor: '#008000', borderWidth: 2, pointRadius: 0, fill: false, borderDash: [5, 5] },
+                    { type: 'line', label: '+1 S.D.', data: createConstantArray(sd1_high), borderColor: '#FFA500', borderWidth: 2, pointRadius: 0, fill: false, borderDash: [5, 5] },
+                    { type: 'line', label: '-1 S.D.', data: createConstantArray(sd1_low), borderColor: '#FFA500', borderWidth: 2, pointRadius: 0, fill: false, borderDash: [5, 5] },
+                    { type: 'line', label: '+2 S.D.', data: createConstantArray(sd2_high), borderColor: '#c0504d', borderWidth: 2, pointRadius: 0, fill: false, borderDash: [5, 5] },
+                    { type: 'line', label: '-2 S.D.', data: createConstantArray(sd2_low), borderColor: '#c0504d', borderWidth: 2, pointRadius: 0, fill: false, borderDash: [5, 5] }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                plugins: { 
+                    legend: { position: 'top', labels: { font: { family: 'Inter', size: 14, weight: 'bold' }, filter: function(item, chart) { return !item.text.includes('-'); } } },
+                    datalabels: { display: false } 
+                },
+                scales: {
+                    x: { 
+                        title: { display: true, text: 'Pocket Number (Sequential by Wheel Layout)', font: { family: 'Inter', weight: 'bold', size: 14 } }, 
+                        grid: { display: false }, 
+                        ticks: { autoSkip: false, maxRotation: 45, minRotation: 45, font: { family: 'Inter', color: '#1e293b', weight: 'bold', size: 14 } } 
+                    },
+                    y: { title: { display: true, text: 'Number of Hits', font: { family: 'Inter', weight: 'bold', size: 14 } }, suggestedMin: 0, suggestedMax: safeMax, ticks: { font: { family: 'Inter', weight: 'bold', size: 14 } } }
+                }
+            }
+        });
+
+        // 3. BIAS DEVIATION CHART 
+        const maxAbsBias = Math.max(...biasData.map(Math.abs));
+        const biasYLimit = maxAbsBias === 0 ? 1 : maxAbsBias * 1.4; 
+
+        const ctxBias = document.getElementById('biasChart').getContext('2d');
+        if (biasChartInstance) biasChartInstance.destroy();
+        biasChartInstance = new Chart(ctxBias, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Bias %',
+                    data: biasData,
+                    backgroundColor: pointColorsBar, 
+                    borderRadius: 4,
+                    clip: false, 
+                    datalabels: {
+                        display: true,
+                        anchor: 'end', 
+                        align: 'end', // Force all labels OUTWARD from the tip
+                        offset: 6,
+                        rotation: -90,
+                        color: '#0f172a',
+                        font: { family: 'Inter', weight: 'bold', size: 11 },
+                        formatter: (val) => (val > 0 ? '+' : '') + val + '%'
+                    }
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                layout: { padding: { top: 60, bottom: 60 } }, // Ample padding for labels
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { 
+                        grid: { display: false }, 
+                        ticks: { autoSkip: false, maxRotation: 45, minRotation: 45, font: { family: 'Inter', color: '#1e293b', weight: 'bold', size: 14 } } 
+                    },
+                    y: { 
+                        title: { display: true, text: 'Deviation (%)', font: { family: 'Inter', weight: 'bold', size: 14 } }, 
+                        grid: { color: '#cbd5e1' }, 
+                        ticks: { font: { family: 'Inter', weight: 'bold', size: 14 } },
+                        suggestedMax: biasYLimit,
+                        suggestedMin: -biasYLimit
+                    }
+                }
+            }
+        });
+    }
+</script>
+</body>
+</html>
